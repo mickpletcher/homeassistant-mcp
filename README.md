@@ -36,6 +36,7 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 OR 
+
 **bash one-liner**
 ```
 pip install "mcp[cli]>=1.0.0" "httpx>=0.27.0" "pydantic>=2.0.0"
@@ -45,9 +46,10 @@ pip install "mcp[cli]>=1.0.0" "httpx>=0.27.0" "pydantic>=2.0.0"
 
 In Home Assistant:
 
-1. Open Profile.
-2. Go to Long Lived Access Tokens.
-3. Create a token and copy it.
+1. Click on Profile in lower left
+2. Click Security tab at the top
+3. Scroll to the bottom to 'Go to Long Lived Access Tokens'.
+4. Create a token and copy it. (Once you click ok, it can never been seen again)
 
 ## Configure Claude Desktop Automatically
 
