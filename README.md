@@ -36,6 +36,7 @@ Install dependencies:
 pip install -r requirements.txt
 ```
 OR 
+
 **bash one-liner**
 ```
 pip install "mcp[cli]>=1.0.0" "httpx>=0.27.0" "pydantic>=2.0.0"
