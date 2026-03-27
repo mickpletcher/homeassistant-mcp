@@ -14,7 +14,10 @@
     Long-Lived Access Token from your HA profile page.
 
 .PARAMETER ServerScriptPath
-    Full path to server.py. Defaults to the cloned repo under Documents\GitHub.
+    Full path to server.py.
+    Default behavior:
+    1) .\server.py from the current working directory where the script is run
+    2) server.py in the same folder as this script (fallback)
 
 .PARAMETER McpServerName
     Key name for this MCP server in the config. Default: homeassistant
@@ -30,7 +33,7 @@
 param(
     [string]$HaUrl          = 'http://homeassistant.local:8123',
     [string]$HaToken        = '',
-    [string]$ServerScriptPath = "$env:USERPROFILE\Documents\GitHub\homeassistant-mcp\server.py",
+    [string]$ServerScriptPath = '',
     [string]$McpServerName  = 'homeassistant'
 )
 
@@ -75,6 +78,16 @@ if (-not $configPath) {
 
 Write-Host "Found config: $configPath" -ForegroundColor Green
 
+if (-not $ServerScriptPath) {
+    $cwdServerPath = Join-Path (Get-Location).Path 'server.py'
+    $scriptDirServerPath = Join-Path $PSScriptRoot 'server.py'
+    if (Test-Path $cwdServerPath) {
+        $ServerScriptPath = $cwdServerPath
+    } else {
+        $ServerScriptPath = $scriptDirServerPath
+    }
+}
+
 # ── 2. Validate inputs ────────────────────────────────────────────────────────
 
 if (-not $HaToken) {
@@ -90,16 +103,7 @@ if (-not (Test-Path $ServerScriptPath)) {
     }
 }
 
-# Normalize to double-backslash for JSON
-$ServerScriptPathJson = $ServerScriptPath.Replace('\', '\\')
-
-# ── 3. Backup original ────────────────────────────────────────────────────────
-
-$backup = "$configPath.bak_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
-Copy-Item $configPath $backup
-Write-Host "Backup saved: $backup" -ForegroundColor Cyan
-
-# ── 4. Read and parse existing config ────────────────────────────────────────
+# ── 3. Read and parse existing config ────────────────────────────────────────
 
 $raw = Get-Content $configPath -Raw -Encoding UTF8
 
@@ -114,7 +118,7 @@ if ([string]::IsNullOrWhiteSpace($raw)) {
     }
 }
 
-# ── 5. Build MCP server entry ─────────────────────────────────────────────────
+# ── 4. Build MCP server entry ─────────────────────────────────────────────────
 
 $newServer = [PSCustomObject]@{
     command = 'python'
@@ -139,14 +143,17 @@ if (Get-Member -InputObject $config.mcpServers -Name $McpServerName -MemberType 
     $config.mcpServers | Add-Member -MemberType NoteProperty -Name $McpServerName -Value $newServer
 }
 
-# ── 6. Write updated config ───────────────────────────────────────────────────
+# ── 5. Write updated config ───────────────────────────────────────────────────
 
 if ($PSCmdlet.ShouldProcess($configPath, 'Write updated MCP config')) {
+    $backup = "$configPath.bak_$(Get-Date -Format 'yyyyMMdd_HHmmss')"
+    Copy-Item $configPath $backup
+    Write-Host "Backup saved: $backup" -ForegroundColor Cyan
     $config | ConvertTo-Json -Depth 10 | Set-Content $configPath -Encoding UTF8
     Write-Host "Config updated successfully." -ForegroundColor Green
 }
 
-# ── 7. Summary ────────────────────────────────────────────────────────────────
+# ── 6. Summary ────────────────────────────────────────────────────────────────
 
 Write-Host ""
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
