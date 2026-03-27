@@ -12,8 +12,11 @@ import os
 from typing import Any, Optional
 
 import httpx
+from dotenv import load_dotenv
 from mcp.server.fastmcp import FastMCP
 from pydantic import BaseModel, ConfigDict, Field
+
+load_dotenv()
 
 # ── Config ────────────────────────────────────────────────────────────────────
 
