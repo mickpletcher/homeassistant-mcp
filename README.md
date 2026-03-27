@@ -28,6 +28,9 @@ Log into Home Assistant → Profile → Long-Lived Access Tokens → Create toke
 pip install -r requirements.txt
 ```
 
+```bash one-liner
+pip install "mcp[cli]>=1.0.0" "httpx>=0.27.0" "pydantic>=2.0.0"
+```
 ### 3. Set environment variables
 
 ```bash
