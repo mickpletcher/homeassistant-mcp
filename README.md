@@ -38,6 +38,16 @@ export HA_URL="http://homeassistant.local:8123"   # or your LAN IP
 export HA_TOKEN="your_long_lived_token_here"
 ```
 
+```PowerShell
+$env:HA_URL = "http://homeassistant.local:8123"
+$env:HA_TOKEN = "your_long_lived_token_here"
+```
+
+```PowerShell Permanent Persistence
+[System.Environment]::SetEnvironmentVariable("HA_URL", "http://homeassistant.local:8123", "User")
+[System.Environment]::SetEnvironmentVariable("HA_TOKEN", "your_long_lived_token_here", "User")
+```
+
 For Proxmox LXC deployments, add these to `/etc/environment` or your
 systemd service file so they persist across restarts.
 
