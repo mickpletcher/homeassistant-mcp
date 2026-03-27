@@ -33,7 +33,7 @@ pip install "mcp[cli]>=1.0.0" "httpx>=0.27.0" "pydantic>=2.0.0"
 ```
 ### 3. Set environment variables
 
-bash
+####bash
 ```
 export HA_URL="http://homeassistant.local:8123"   # or your LAN IP
 export HA_TOKEN="your_long_lived_token_here"
