@@ -1,13 +1,18 @@
 #!/usr/bin/env python3
 """
-set_claude_mcp.py
+setup_mcp.py
 
 Finds claude_desktop_config.json and adds or updates a Home Assistant
 MCP server entry. Backs up the original file before making changes.
 
+Default server path behavior:
+    1) ./server.py from the current working directory where this script runs
+    2) server.py in the same folder as this script (fallback)
+
 Usage:
-    python set_claude_mcp.py --ha-token YOUR_TOKEN
-    python set_claude_mcp.py --ha-url http://192.168.1.100:8123 --ha-token abc123 --script-path C:/repos/homeassistant-mcp/server.py
+    python setup_mcp.py --ha-token YOUR_TOKEN
+    python setup_mcp.py --ha-url http://192.168.1.100:8123 --ha-token abc123
+    python setup_mcp.py --script-path C:/repos/homeassistant-mcp/server.py
 """
 
 import argparse
@@ -19,6 +24,9 @@ import shutil
 import sys
 from datetime import datetime
 from pathlib import Path
+
+
+DEFAULT_HA_URL = "http://homeassistant.local:8123"
 
 
 # ── Config search ─────────────────────────────────────────────────────────────
@@ -92,19 +100,31 @@ def write_config(config_path: Path, data: dict) -> None:
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
-    default_script = str(
-        Path.home() / "Documents" / "GitHub" / "homeassistant-mcp" / "server.py"
-    )
+    cwd_server = Path.cwd() / "server.py"
+    script_dir_server = Path(__file__).resolve().parent / "server.py"
+    default_script = str(cwd_server if cwd_server.exists() else script_dir_server)
 
     parser = argparse.ArgumentParser(
-        description="Add or update a Home Assistant MCP server entry in claude_desktop_config.json"
+        description=(
+            "Add or update a Home Assistant MCP server entry in "
+            "claude_desktop_config.json"
+        )
     )
-    parser.add_argument("--ha-url",      default="http://homeassistant.local:8123",
-                        help="Home Assistant base URL (default: http://homeassistant.local:8123)")
+    parser.add_argument(
+        "--ha-url",
+        default=DEFAULT_HA_URL,
+        help=f"Home Assistant base URL (default: {DEFAULT_HA_URL})",
+    )
     parser.add_argument("--ha-token",    default="",
                         help="Long-Lived Access Token (prompted if omitted)")
-    parser.add_argument("--script-path", default=default_script,
-                        help=f"Full path to server.py (default: {default_script})")
+    parser.add_argument(
+        "--script-path",
+        default=default_script,
+        help=(
+            "Full path to server.py "
+            f"(default: {default_script}; prefers current working directory)"
+        ),
+    )
     parser.add_argument("--server-name", default="homeassistant",
                         help="Key name for this MCP server entry (default: homeassistant)")
     parser.add_argument("--dry-run",     action="store_true",
