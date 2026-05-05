@@ -1,135 +1,243 @@
 # Home Assistant MCP Server
 
-MCP server that connects Claude to a local Home Assistant instance via the REST API.
+This project lets Claude Desktop talk to your Home Assistant system.
 
-## Overview
+After setup, you can ask Claude things like:
 
-This server exposes 12 tools covering the full Home Assistant REST API surface: reading and controlling entities, calling services, managing climate devices, querying history, firing events, and rendering Jinja2 templates. It runs as a local stdio subprocess, so no ports are opened and no cloud relay is required. Authentication uses a standard Home Assistant long-lived access token passed via environment variable.
-
-## Tools
-
-| Tool | Description |
-|---|---|
-| `ha_get_config` | Returns HA version, location name, timezone, unit system, and installed components |
-| `ha_list_entities` | Lists entities with current state, filterable by domain or name search |
-| `ha_get_state` | Returns full state and all attributes for a specific entity |
-| `ha_turn_on` | Turns on a light or switch, with optional brightness, color temp, RGB color, and transition |
-| `ha_turn_off` | Turns off any entity that supports homeassistant.turn_off |
-| `ha_toggle` | Toggles any entity between on and off |
-| `ha_set_temperature` | Sets target temperature and optional HVAC mode on a climate entity |
-| `ha_call_service` | Calls any HA service with arbitrary data — covers media players, covers, notifications, and more |
-| `ha_list_services` | Lists available services and their fields by domain |
-| `ha_get_history` | Returns state change history for an entity over a configurable window up to 7 days |
-| `ha_fire_event` | Fires a custom HA event with an optional data payload |
-| `ha_render_template` | Renders a Jinja2 template against live HA state and returns the result |
-
-## Repository Structure
-
-```
-homeassistant-mcp/
-|-- ha_mcp_server.py    # MCP server — all 12 tools, FastMCP + httpx
-|-- HA_MCP_SETUP.md     # Installation and configuration guide
-|-- README.md
+```text
+What lights are on?
+Turn off the kitchen light.
+Set the thermostat to 72.
+Show me the outdoor temperature history.
+Run my morning automation.
 ```
 
-## Prerequisites
+Claude does this by using Home Assistant's local API. Nothing in this project opens a public web server.
 
-- Python 3.10+
-- Home Assistant running on your local network
-- Claude desktop app (Cowork mode) or any MCP-compatible client
+## Who This Is For
 
-## Installation
+Use this if:
 
-**1. Install dependencies**
+- You use Home Assistant.
+- You use Claude Desktop or another app that supports MCP.
+- You want Claude to read or control your smart home devices.
+
+This works on:
+
+- macOS
+- Windows 11
+
+## What You Need
+
+Before you start, you need:
+
+- Home Assistant already running.
+- Python 3 installed.
+- Claude Desktop installed.
+- A Home Assistant long-lived access token.
+
+If you do not know whether Python is installed, the setup steps below will help you check.
+
+## Important Safety Note
+
+Claude may be able to control real devices in your home, depending on what you ask it to do and what permissions your Home Assistant token has.
+
+Be careful with devices like:
+
+- Door locks
+- Garage doors
+- Alarms
+- Heaters
+- Ovens
+- Irrigation systems
+- Any automation that changes your home state
+
+Use a Home Assistant token from an account with only the permissions you are comfortable giving Claude.
+
+## Step 1: Download This Project
+
+Download or clone this project to your computer.
+
+For example, you might put it here:
+
+macOS:
+
+```text
+/Users/yourname/homeassistant-mcp
+```
+
+Windows:
+
+```text
+C:\Users\yourname\homeassistant-mcp
+```
+
+## Step 2: Install Python Dependencies
+
+Open a terminal in the project folder.
+
+On macOS, use Terminal and run:
 
 ```bash
-pip3 install mcp httpx pydantic
+python3 -m pip install -r requirements.txt
 ```
 
-**2. Get a Home Assistant long-lived access token**
+On Windows 11, use PowerShell and run:
 
-In Home Assistant: Profile (bottom-left) → Long-Lived Access Tokens → Create Token. Copy the token — it is only shown once.
-
-**3. Add the server to your Claude MCP config**
-
-Open `~/Library/Application Support/Claude/claude_desktop_config.json` and add:
-
-```json
-{
-  "mcpServers": {
-    "homeassistant": {
-      "command": "python3",
-      "args": ["/absolute/path/to/ha_mcp_server.py"],
-      "env": {
-        "HA_URL": "http://homeassistant.local:8123",
-        "HA_TOKEN": "your_token_here"
-      }
-    }
-  }
-}
+```powershell
+py -3 -m pip install -r requirements.txt
 ```
 
-Replace `HA_URL` with your HA address and `HA_TOKEN` with the token from step 2.
+If this step says Python is missing, install Python 3 from [python.org](https://www.python.org/downloads/) and try again.
 
-**4. Restart Claude**
+## Step 3: Create a Home Assistant Token
 
-The 12 HA tools will appear automatically on next launch.
+In Home Assistant:
 
-## Environment Variables
+1. Open your user profile.
+2. Scroll to **Long-Lived Access Tokens**.
+3. Create a new token.
+4. Name it something clear, like `Claude MCP`.
+5. Copy the token.
 
-| Variable | Required | Example | Description |
-|---|---|---|---|
-| `HA_TOKEN` | Yes | `eyJ0...` | Long-lived access token from your HA profile |
-| `HA_URL` | No | `http://192.168.1.100:8123` | Base URL of your HA instance (default: `http://homeassistant.local:8123`) |
+You will only see the token once, so save it somewhere private until setup is complete.
 
-## Usage
+Do not commit this token to GitHub. Do not share it publicly.
 
-Once connected, Claude can control your Home Assistant instance in natural language:
+## Step 4: Connect It To Claude Desktop
 
-```
-Turn off all the lights
-Dim the bedroom lights to 30%
-Set the thermostat to 72 in heat mode
-What has the outdoor temperature been doing over the last 6 hours?
-Trigger the morning routine automation
-Send a notification to my phone that the garage door is open
-How many lights are currently on?
-```
+The easiest way is to use the setup script.
 
-For services not covered by the convenience tools, `ha_call_service` handles anything in your HA instance:
+### macOS
 
-```
-Play a radio stream on the kitchen media player
-Open the garage door cover
-Run the vacuum in the living room
+In Terminal, from this project folder, run:
+
+```bash
+python3 setup_mcp.py --ha-url http://homeassistant.local:8123 --ha-token YOUR_TOKEN_HERE
 ```
 
-## Security Notes
+Replace `YOUR_TOKEN_HERE` with the token you copied from Home Assistant.
 
-- Store `HA_TOKEN` in your Claude config or environment only — never commit it to the repository
-- Add `claude_desktop_config.json` and `.env` to `.gitignore`
-- The server binds to stdio only and does not open any network ports on the host machine
+If your Home Assistant does not use `homeassistant.local`, use its IP address instead:
 
-## Common Errors
+```bash
+python3 setup_mcp.py --ha-url http://192.168.1.100:8123 --ha-token YOUR_TOKEN_HERE
+```
 
-| Problem | Likely Cause | Fix |
-|---|---|---|
-| "Cannot reach Home Assistant" | Mac and HA on different networks, or wrong URL | Try the IP address instead of `homeassistant.local` |
-| "Unauthorized" | Token invalid, expired, or copied incorrectly | Create a new token in HA Profile |
-| Server not appearing in Claude | Invalid JSON in config, or wrong file path | Validate the JSON and use an absolute path to `ha_mcp_server.py` |
-| "Module not found" | Dependencies not installed for the Python Claude calls | Run `pip3 install mcp httpx pydantic` with the same Python binary |
+### Windows 11
 
-## Blog
+In PowerShell, from this project folder, run:
 
-Technical posts about automation and home lab work at [mickitblog.blogspot.com](https://mickitblog.blogspot.com).
+```powershell
+py -3 setup_mcp.py --ha-url http://homeassistant.local:8123 --ha-token YOUR_TOKEN_HERE
+```
 
-## Related Repositories
+Replace `YOUR_TOKEN_HERE` with the token you copied from Home Assistant.
 
-| Repo | Description |
+If your Home Assistant does not use `homeassistant.local`, use its IP address instead:
+
+```powershell
+py -3 setup_mcp.py --ha-url http://192.168.1.100:8123 --ha-token YOUR_TOKEN_HERE
+```
+
+### Windows Alternative
+
+Windows users can also use the included PowerShell script:
+
+```powershell
+.\Set-ClaudeMcp.ps1 -HaUrl "http://homeassistant.local:8123" -HaToken "YOUR_TOKEN_HERE"
+```
+
+## Step 5: Restart Claude Desktop
+
+Close Claude Desktop completely, then open it again.
+
+After restarting, Claude should be able to use the Home Assistant tools.
+
+## What Tools Are Included
+
+Claude gets tools that can:
+
+- Read your Home Assistant configuration.
+- List devices and entity states.
+- Check the state of one device or sensor.
+- Call Home Assistant services.
+- List available Home Assistant services.
+- Trigger automations.
+- Read recent history for one entity.
+- Render Home Assistant templates.
+- Ask Home Assistant to check its configuration.
+
+In normal use, you do not need to call these tools by name. You can usually ask Claude in plain English.
+
+## Common Problems
+
+### Claude cannot reach Home Assistant
+
+Try using the IP address instead of `homeassistant.local`.
+
+Example:
+
+```text
+http://192.168.1.100:8123
+```
+
+### Claude says unauthorized
+
+Your token may be wrong, expired, or copied incorrectly.
+
+Create a new long-lived access token in Home Assistant and run the setup again.
+
+### Claude does not show the Home Assistant tools
+
+Try these steps:
+
+1. Restart Claude Desktop.
+2. Make sure you ran the setup command from this project folder.
+3. Make sure the Python dependency install step finished successfully.
+4. Run the setup command again.
+
+### A Python module is missing
+
+The dependencies may have been installed into a different Python installation.
+
+Run the dependency install command again from this project folder:
+
+macOS:
+
+```bash
+python3 -m pip install -r requirements.txt
+```
+
+Windows:
+
+```powershell
+py -3 -m pip install -r requirements.txt
+```
+
+## Files In This Project
+
+| File | What It Does |
 |---|---|
-| [mickpletcher/Anthropic](https://github.com/mickpletcher/Anthropic) | Claude skills library for Cowork mode |
-| [mickpletcher/PiHole](https://github.com/mickpletcher/PiHole) | Curated Pi-hole blocklist repository |
+| `server.py` | The actual Home Assistant MCP server |
+| `setup_mcp.py` | Setup helper for macOS and Windows |
+| `Set-ClaudeMcp.ps1` | Windows PowerShell setup helper |
+| `requirements.txt` | Python packages this project needs |
+| `README.md` | This guide |
+
+## For Advanced Users
+
+The setup script edits Claude Desktop's MCP configuration file and creates a backup before saving changes.
+
+The MCP server entry points Claude to `server.py` and passes these environment variables:
+
+| Variable | Meaning |
+|---|---|
+| `HA_URL` | Your Home Assistant address |
+| `HA_TOKEN` | Your Home Assistant long-lived access token |
+
+You can edit Claude Desktop's MCP config manually if you prefer, but most users should use the setup script.
 
 ## License
 
-This project is licensed under the MIT License. See `LICENSE` for the full text.
+This project is licensed under the MIT License. See `LICENSE` for details.

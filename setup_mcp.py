@@ -10,10 +10,12 @@ Default server path behavior:
     2) server.py in the same folder as this script (fallback)
 
 Usage:
-    python setup_mcp.py --ha-token YOUR_TOKEN
-    python setup_mcp.py --ha-url http://192.168.1.100:8123 --ha-token abc123
-    python setup_mcp.py --script-path C:/repos/homeassistant-mcp/server.py
+    python3 setup_mcp.py --ha-token YOUR_TOKEN
+    python3 setup_mcp.py --ha-url http://192.168.1.100:8123 --ha-token abc123
+    py -3 setup_mcp.py --script-path C:/repos/homeassistant-mcp/server.py
 """
+
+from __future__ import annotations
 
 import argparse
 import getpass
@@ -97,6 +99,11 @@ def write_config(config_path: Path, data: dict) -> None:
     config_path.write_text(json.dumps(data, indent=2), encoding="utf-8")
 
 
+def current_python_command() -> str:
+    """Return the interpreter that should launch the MCP server later."""
+    return sys.executable or ("python.exe" if os.name == "nt" else "python3")
+
+
 # ── Main ──────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -162,7 +169,7 @@ def main() -> None:
 
     # ── Build MCP entry
     mcp_entry = {
-        "command": "python",
+        "command": current_python_command(),
         "args":    [str(script_path)],
         "env": {
             "HA_URL":   args.ha_url,
@@ -193,6 +200,7 @@ def main() -> None:
     print("━" * 44)
     print(f"  MCP Server : {args.server_name}")
     print(f"  HA URL     : {args.ha_url}")
+    print(f"  Python     : {current_python_command()}")
     print(f"  Script     : {script_path}")
     print(f"  Config     : {config_path}")
     print("━" * 44)

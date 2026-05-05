@@ -7,6 +7,8 @@ Authentication:
   Generate a Long-Lived Access Token at: http://<HA_HOST>:8123/profile
 """
 
+from __future__ import annotations
+
 import json
 import os
 from typing import Any, Optional
@@ -211,7 +213,7 @@ async def ha_get_state(params: EntityInput) -> str:
     annotations={
         "title": "Call HA Service",
         "readOnlyHint": False,
-        "destructiveHint": False,
+        "destructiveHint": True,
         "idempotentHint": False,
     }
 )
@@ -275,7 +277,7 @@ async def ha_list_services(params: DomainFilter) -> str:
     annotations={
         "title": "Trigger Automation",
         "readOnlyHint": False,
-        "destructiveHint": False,
+        "destructiveHint": True,
         "idempotentHint": False,
     }
 )

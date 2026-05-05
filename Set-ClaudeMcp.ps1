@@ -40,6 +40,27 @@ param(
 Set-StrictMode -Version Latest
 $ErrorActionPreference = 'Stop'
 
+function Resolve-PythonForMcp {
+    $python = Get-Command python -ErrorAction SilentlyContinue
+    if ($python) {
+        return [PSCustomObject]@{
+            Command = $python.Source
+            ArgsPrefix = @()
+        }
+    }
+
+    $py = Get-Command py -ErrorAction SilentlyContinue
+    if ($py) {
+        return [PSCustomObject]@{
+            Command = $py.Source
+            ArgsPrefix = @('-3')
+        }
+    }
+
+    Write-Error "Could not find Python. Install Python 3, then rerun this script."
+    exit 1
+}
+
 # ── 1. Find config file ───────────────────────────────────────────────────────
 
 function Find-ClaudeConfig {
@@ -120,9 +141,11 @@ if ([string]::IsNullOrWhiteSpace($raw)) {
 
 # ── 4. Build MCP server entry ─────────────────────────────────────────────────
 
+$python = Resolve-PythonForMcp
+
 $newServer = [PSCustomObject]@{
-    command = 'python'
-    args    = @($ServerScriptPath)
+    command = $python.Command
+    args    = @($python.ArgsPrefix) + @($ServerScriptPath)
     env     = [PSCustomObject]@{
         HA_URL   = $HaUrl
         HA_TOKEN = $HaToken
@@ -159,6 +182,7 @@ Write-Host ""
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
 Write-Host " MCP Server: $McpServerName"              -ForegroundColor Cyan
 Write-Host " HA URL:     $HaUrl"                      -ForegroundColor Cyan
+Write-Host " Python:     $($python.Command)"          -ForegroundColor Cyan
 Write-Host " Script:     $ServerScriptPath"           -ForegroundColor Cyan
 Write-Host " Config:     $configPath"                 -ForegroundColor Cyan
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
