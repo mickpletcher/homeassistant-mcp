@@ -22,6 +22,21 @@
 .PARAMETER McpServerName
     Key name for this MCP server in the config. Default: homeassistant
 
+.PARAMETER AllowSensitiveActions
+    Allow all sensitive Home Assistant actions. Use carefully.
+
+.PARAMETER AllowedSensitiveDomains
+    Comma-separated sensitive domains to allow, such as climate,cover.
+
+.PARAMETER AllowedSensitiveEntities
+    Comma-separated sensitive entities to allow, such as lock.front_door.
+
+.PARAMETER DeniedDomains
+    Comma-separated domains to always block.
+
+.PARAMETER DeniedEntities
+    Comma-separated entities or wildcard patterns to always block.
+
 .EXAMPLE
     .\Set-ClaudeMcp.ps1 -HaToken "your_token_here"
 
@@ -34,7 +49,12 @@ param(
     [string]$HaUrl          = 'http://homeassistant.local:8123',
     [string]$HaToken        = '',
     [string]$ServerScriptPath = '',
-    [string]$McpServerName  = 'homeassistant'
+    [string]$McpServerName  = 'homeassistant',
+    [switch]$AllowSensitiveActions,
+    [string]$AllowedSensitiveDomains = '',
+    [string]$AllowedSensitiveEntities = '',
+    [string]$DeniedDomains = '',
+    [string]$DeniedEntities = ''
 )
 
 Set-StrictMode -Version Latest
@@ -143,13 +163,30 @@ if ([string]::IsNullOrWhiteSpace($raw)) {
 
 $python = Resolve-PythonForMcp
 
+$sensitiveActionsValue = if ($AllowSensitiveActions) { 'true' } else { 'false' }
+$envConfig = [ordered]@{
+    HA_URL = $HaUrl
+    HA_TOKEN = $HaToken
+    HA_ALLOW_SENSITIVE_ACTIONS = $sensitiveActionsValue
+}
+
+if ($AllowedSensitiveDomains) {
+    $envConfig['HA_ALLOWED_SENSITIVE_DOMAINS'] = $AllowedSensitiveDomains
+}
+if ($AllowedSensitiveEntities) {
+    $envConfig['HA_ALLOWED_SENSITIVE_ENTITIES'] = $AllowedSensitiveEntities
+}
+if ($DeniedDomains) {
+    $envConfig['HA_DENIED_DOMAINS'] = $DeniedDomains
+}
+if ($DeniedEntities) {
+    $envConfig['HA_DENIED_ENTITIES'] = $DeniedEntities
+}
+
 $newServer = [PSCustomObject]@{
     command = $python.Command
     args    = @($python.ArgsPrefix) + @($ServerScriptPath)
-    env     = [PSCustomObject]@{
-        HA_URL   = $HaUrl
-        HA_TOKEN = $HaToken
-    }
+    env     = [PSCustomObject]$envConfig
 }
 
 # Ensure mcpServers key exists
@@ -185,6 +222,8 @@ Write-Host " HA URL:     $HaUrl"                      -ForegroundColor Cyan
 Write-Host " Python:     $($python.Command)"          -ForegroundColor Cyan
 Write-Host " Script:     $ServerScriptPath"           -ForegroundColor Cyan
 Write-Host " Config:     $configPath"                 -ForegroundColor Cyan
+Write-Host " Sensitive:  $(if ($AllowSensitiveActions) { 'allowed globally' } else { 'blocked by default' })" `
+    -ForegroundColor Cyan
 Write-Host "━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Restart Claude Desktop to load the new MCP server." -ForegroundColor White

@@ -13,6 +13,7 @@ Usage:
     python3 setup_mcp.py --ha-token YOUR_TOKEN
     python3 setup_mcp.py --ha-url http://192.168.1.100:8123 --ha-token abc123
     py -3 setup_mcp.py --script-path C:/repos/homeassistant-mcp/server.py
+    python3 setup_mcp.py --ha-token YOUR_TOKEN --allowed-sensitive-entities lock.front_door
 """
 
 from __future__ import annotations
@@ -134,6 +135,31 @@ def main() -> None:
     )
     parser.add_argument("--server-name", default="homeassistant",
                         help="Key name for this MCP server entry (default: homeassistant)")
+    parser.add_argument(
+        "--allow-sensitive-actions",
+        action="store_true",
+        help="Allow all sensitive actions. Use carefully.",
+    )
+    parser.add_argument(
+        "--allowed-sensitive-domains",
+        default="",
+        help="Comma-separated sensitive domains to allow, e.g. climate,cover",
+    )
+    parser.add_argument(
+        "--allowed-sensitive-entities",
+        default="",
+        help="Comma-separated sensitive entities to allow, e.g. lock.front_door",
+    )
+    parser.add_argument(
+        "--denied-domains",
+        default="",
+        help="Comma-separated domains to always block, e.g. lock,alarm_control_panel",
+    )
+    parser.add_argument(
+        "--denied-entities",
+        default="",
+        help="Comma-separated entities or wildcard patterns to always block, e.g. lock.front_door,switch.oven_*",
+    )
     parser.add_argument("--dry-run",     action="store_true",
                         help="Preview changes without writing to disk")
     args = parser.parse_args()
@@ -168,13 +194,23 @@ def main() -> None:
     config = load_config(config_path)
 
     # ── Build MCP entry
+    env = {
+        "HA_URL":   args.ha_url,
+        "HA_TOKEN": ha_token,
+        "HA_ALLOW_SENSITIVE_ACTIONS": "true" if args.allow_sensitive_actions else "false",
+    }
+    optional_guardrails = {
+        "HA_ALLOWED_SENSITIVE_DOMAINS": args.allowed_sensitive_domains,
+        "HA_ALLOWED_SENSITIVE_ENTITIES": args.allowed_sensitive_entities,
+        "HA_DENIED_DOMAINS": args.denied_domains,
+        "HA_DENIED_ENTITIES": args.denied_entities,
+    }
+    env.update({key: value for key, value in optional_guardrails.items() if value})
+
     mcp_entry = {
         "command": current_python_command(),
         "args":    [str(script_path)],
-        "env": {
-            "HA_URL":   args.ha_url,
-            "HA_TOKEN": ha_token,
-        }
+        "env": env,
     }
 
     # ── Merge into config

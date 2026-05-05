@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import json
 import os
+from fnmatch import fnmatch
 from typing import Any, Optional
 
 import httpx
@@ -26,6 +27,49 @@ HA_URL   = os.getenv("HA_URL", "http://homeassistant.local:8123")
 HA_TOKEN = os.getenv("HA_TOKEN", "")
 
 TIMEOUT = 15.0  # seconds
+
+DEFAULT_SENSITIVE_DOMAINS = {
+    "alarm_control_panel",
+    "automation",
+    "climate",
+    "cover",
+    "humidifier",
+    "lock",
+    "script",
+    "siren",
+    "valve",
+    "water_heater",
+}
+
+SENSITIVE_DOMAINS = {
+    item.strip()
+    for item in os.getenv(
+        "HA_SENSITIVE_DOMAINS",
+        ",".join(sorted(DEFAULT_SENSITIVE_DOMAINS)),
+    ).split(",")
+    if item.strip()
+}
+ALLOW_SENSITIVE_ACTIONS = os.getenv("HA_ALLOW_SENSITIVE_ACTIONS", "").lower() in {"1", "true", "yes", "on"}
+ALLOWED_SENSITIVE_DOMAINS = {
+    item.strip()
+    for item in os.getenv("HA_ALLOWED_SENSITIVE_DOMAINS", "").split(",")
+    if item.strip()
+}
+ALLOWED_SENSITIVE_ENTITIES = {
+    item.strip()
+    for item in os.getenv("HA_ALLOWED_SENSITIVE_ENTITIES", "").split(",")
+    if item.strip()
+}
+DENIED_DOMAINS = {
+    item.strip()
+    for item in os.getenv("HA_DENIED_DOMAINS", "").split(",")
+    if item.strip()
+}
+DENIED_ENTITIES = {
+    item.strip()
+    for item in os.getenv("HA_DENIED_ENTITIES", "").split(",")
+    if item.strip()
+}
 
 # ── MCP server ────────────────────────────────────────────────────────────────
 
@@ -68,6 +112,8 @@ async def _post(path: str, body: dict | None = None) -> Any:
 
 def _handle_error(e: Exception) -> str:
     """Translate httpx exceptions into human-readable error strings."""
+    if isinstance(e, PermissionError):
+        return f"Blocked by safety guardrails: {e}"
     if isinstance(e, httpx.HTTPStatusError):
         code = e.response.status_code
         if code == 401:
@@ -170,6 +216,82 @@ class TemplateInput(BaseModel):
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
 
+def _as_list(value: Any) -> list[str]:
+    """Normalize one or many entity IDs from service payloads."""
+    if not value:
+        return []
+    if isinstance(value, str):
+        return [value]
+    if isinstance(value, list):
+        return [item for item in value if isinstance(item, str)]
+    return []
+
+
+def _domain_from_entity(entity_id: str) -> str:
+    """Return the domain part of a Home Assistant entity ID."""
+    return entity_id.split(".", 1)[0] if "." in entity_id else ""
+
+
+def _matches_any(value: str, patterns: set[str]) -> bool:
+    """Return True if value matches an exact or wildcard pattern."""
+    return any(fnmatch(value, pattern) for pattern in patterns)
+
+
+def _service_entity_ids(domain: str, body: dict[str, Any]) -> list[str]:
+    """Collect entity IDs from common Home Assistant service payload shapes."""
+    entity_ids = _as_list(body.get("entity_id"))
+    target = body.get("target")
+    if isinstance(target, dict):
+        entity_ids.extend(_as_list(target.get("entity_id")))
+    if not entity_ids and "." in domain:
+        entity_ids.append(domain)
+    return entity_ids
+
+
+def _check_safety_guardrails(domain: str, service: str, body: dict[str, Any]) -> None:
+    """Block denied or sensitive service calls unless explicitly allowed."""
+    entity_ids = _service_entity_ids(domain, body)
+    domains = {_domain_from_entity(entity_id) for entity_id in entity_ids if _domain_from_entity(entity_id)}
+    domains.add(domain)
+
+    denied_domains = sorted(item for item in domains if item in DENIED_DOMAINS)
+    if denied_domains:
+        raise PermissionError(
+            f"{domain}.{service} targets denied domain(s): {', '.join(denied_domains)}."
+        )
+
+    denied_entities = sorted(entity_id for entity_id in entity_ids if _matches_any(entity_id, DENIED_ENTITIES))
+    if denied_entities:
+        raise PermissionError(
+            f"{domain}.{service} targets denied entity/entities: {', '.join(denied_entities)}."
+        )
+
+    sensitive_domains = sorted(item for item in domains if item in SENSITIVE_DOMAINS)
+    if not sensitive_domains or ALLOW_SENSITIVE_ACTIONS:
+        return
+
+    blocked_entities = [
+        entity_id
+        for entity_id in entity_ids
+        if _domain_from_entity(entity_id) in SENSITIVE_DOMAINS
+        and _domain_from_entity(entity_id) not in ALLOWED_SENSITIVE_DOMAINS
+        and not _matches_any(entity_id, ALLOWED_SENSITIVE_ENTITIES)
+    ]
+    blocked_domains = []
+    if not entity_ids:
+        blocked_domains = [item for item in sensitive_domains if item not in ALLOWED_SENSITIVE_DOMAINS]
+    if blocked_domains or blocked_entities:
+        details: list[str] = []
+        if blocked_domains:
+            details.append(f"sensitive domain(s): {', '.join(blocked_domains)}")
+        if blocked_entities:
+            details.append(f"sensitive entity/entities: {', '.join(blocked_entities)}")
+        raise PermissionError(
+            f"{domain}.{service} is blocked because it targets {'; '.join(details)}. "
+            "Set HA_ALLOW_SENSITIVE_ACTIONS=true, HA_ALLOWED_SENSITIVE_DOMAINS, "
+            "or HA_ALLOWED_SENSITIVE_ENTITIES to allow this intentionally."
+        )
+
 async def _call_service(
     domain: str,
     service: str,
@@ -180,6 +302,7 @@ async def _call_service(
     body: dict[str, Any] = {"entity_id": entity_id}
     if service_data:
         body.update(service_data)
+    _check_safety_guardrails(domain, service, body)
     result = await _post(f"services/{domain}/{service}", body)
     return json.dumps(result, indent=2)
 
@@ -291,6 +414,7 @@ async def ha_call_service(params: CallServiceInput) -> str:
             body["entity_id"] = params.entity_id
         if params.service_data:
             body.update(params.service_data)
+        _check_safety_guardrails(params.domain, params.service, body)
         result = await _post(f"services/{params.domain}/{params.service}", body)
         return json.dumps(result, indent=2)
     except Exception as e:
@@ -492,8 +616,7 @@ async def ha_trigger_automation(params: AutomationInput) -> str:
         Confirmation message from Home Assistant.
     """
     try:
-        result = await _post("services/automation/trigger", {"entity_id": params.automation_id})
-        return json.dumps(result, indent=2)
+        return await _call_service("automation", "trigger", params.automation_id)
     except Exception as e:
         return _handle_error(e)
 

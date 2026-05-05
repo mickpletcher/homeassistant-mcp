@@ -9,7 +9,7 @@ What lights are on?
 Turn off the kitchen light.
 Set the thermostat to 72.
 Show me the outdoor temperature history.
-Run my morning automation.
+Run my morning automation if it is allowed by my safety settings.
 ```
 
 Claude does this by using Home Assistant's local API. Nothing in this project opens a public web server.
@@ -44,17 +44,22 @@ If you do not know whether Python is installed, the setup steps below will help 
 
 Claude may be able to control real devices in your home, depending on what you ask it to do and what permissions your Home Assistant token has.
 
+This project blocks sensitive actions by default.
+
 Be careful with devices like:
 
 - Door locks
 - Garage doors
 - Alarms
+- Climate controls
 - Heaters
 - Ovens
 - Irrigation systems
 - Any automation that changes your home state
 
 Use a Home Assistant token from an account with only the permissions you are comfortable giving Claude.
+
+Sensitive actions can be allowed later, but you should only allow devices you understand and trust.
 
 ## Step 1: Download This Project
 
@@ -126,6 +131,14 @@ If your Home Assistant does not use `homeassistant.local`, use its IP address in
 python3 setup_mcp.py --ha-url http://192.168.1.100:8123 --ha-token YOUR_TOKEN_HERE
 ```
 
+To allow one sensitive device, add `--allowed-sensitive-entities`.
+
+Example:
+
+```bash
+python3 setup_mcp.py --ha-url http://homeassistant.local:8123 --ha-token YOUR_TOKEN_HERE --allowed-sensitive-entities lock.front_door
+```
+
 ### Windows 11
 
 In PowerShell, from this project folder, run:
@@ -142,12 +155,26 @@ If your Home Assistant does not use `homeassistant.local`, use its IP address in
 py -3 setup_mcp.py --ha-url http://192.168.1.100:8123 --ha-token YOUR_TOKEN_HERE
 ```
 
+To allow one sensitive device, add `--allowed-sensitive-entities`.
+
+Example:
+
+```powershell
+py -3 setup_mcp.py --ha-url http://homeassistant.local:8123 --ha-token YOUR_TOKEN_HERE --allowed-sensitive-entities lock.front_door
+```
+
 ### Windows Alternative
 
 Windows users can also use the included PowerShell script:
 
 ```powershell
 .\Set-ClaudeMcp.ps1 -HaUrl "http://homeassistant.local:8123" -HaToken "YOUR_TOKEN_HERE"
+```
+
+To allow one sensitive device with the PowerShell helper:
+
+```powershell
+.\Set-ClaudeMcp.ps1 -HaUrl "http://homeassistant.local:8123" -HaToken "YOUR_TOKEN_HERE" -AllowedSensitiveEntities "lock.front_door"
 ```
 
 ## Step 5: Restart Claude Desktop
@@ -175,6 +202,47 @@ Claude gets tools that can:
 - Ask Home Assistant to check its configuration.
 
 In normal use, you do not need to call these tools by name. You can usually ask Claude in plain English.
+
+## Safety Settings
+
+Sensitive actions are blocked unless you explicitly allow them.
+
+Blocked by default:
+
+- Alarms
+- Automations
+- Climate devices
+- Covers, such as garage doors, shades, blinds, and curtains
+- Door locks
+- Humidifiers
+- Scripts
+- Sirens
+- Valves
+- Water heaters
+
+You can allow sensitive actions in three ways:
+
+| Setting | What It Does |
+|---|---|
+| `HA_ALLOW_SENSITIVE_ACTIONS=true` | Allows all sensitive actions |
+| `HA_ALLOWED_SENSITIVE_DOMAINS=climate,cover` | Allows whole sensitive device groups |
+| `HA_ALLOWED_SENSITIVE_ENTITIES=lock.front_door` | Allows only listed sensitive devices |
+| `HA_SENSITIVE_DOMAINS=lock,cover,climate` | Replaces the default sensitive device group list |
+
+You can also block devices even if they would otherwise be allowed:
+
+| Setting | What It Does |
+|---|---|
+| `HA_DENIED_DOMAINS=lock` | Always blocks a whole device group |
+| `HA_DENIED_ENTITIES=lock.front_door,switch.oven_*` | Always blocks listed devices or wildcard patterns |
+
+For most users, the safest choice is to allow individual entities only.
+
+Example:
+
+```text
+HA_ALLOWED_SENSITIVE_ENTITIES=climate.hallway,cover.living_room_shades
+```
 
 ## Common Problems
 
@@ -241,6 +309,12 @@ The MCP server entry points Claude to `server.py` and passes these environment v
 |---|---|
 | `HA_URL` | Your Home Assistant address |
 | `HA_TOKEN` | Your Home Assistant long-lived access token |
+| `HA_ALLOW_SENSITIVE_ACTIONS` | Allows all sensitive actions when set to `true` |
+| `HA_SENSITIVE_DOMAINS` | Custom list of domains treated as sensitive |
+| `HA_ALLOWED_SENSITIVE_DOMAINS` | Sensitive domains allowed by name |
+| `HA_ALLOWED_SENSITIVE_ENTITIES` | Sensitive entities allowed by name or wildcard pattern |
+| `HA_DENIED_DOMAINS` | Domains that are always blocked |
+| `HA_DENIED_ENTITIES` | Entities or wildcard patterns that are always blocked |
 
 You can edit Claude Desktop's MCP config manually if you prefer, but most users should use the setup script.
 
