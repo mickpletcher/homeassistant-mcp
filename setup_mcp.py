@@ -178,6 +178,7 @@ def main() -> None:
         ha_token = getpass.getpass("Enter your Home Assistant Long-Lived Access Token: ")
     if not ha_token:
         print("ERROR: HA token is required.", file=sys.stderr)
+        
         sys.exit(1)
 
     # ── Validate script path
