@@ -79,6 +79,8 @@ def _handle_error(e: Exception) -> str:
         return f"Connection refused. Verify HA_URL ({HA_URL}) is reachable."
     if isinstance(e, httpx.TimeoutException):
         return "Request timed out. Home Assistant may be under load."
+    if isinstance(e, ValueError):
+        return f"Invalid input: {e}"
     return f"Unexpected error: {type(e).__name__}: {e}"
 
 
@@ -89,6 +91,33 @@ class EntityInput(BaseModel):
 
     model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
     entity_id: str = Field(..., description="Entity ID, e.g. 'light.living_room'")
+
+
+class TurnOnInput(BaseModel):
+    """Input model for turning on an entity with optional Home Assistant service data."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+    entity_id: str = Field(..., description="Entity ID, e.g. 'light.living_room'")
+    service_data: Optional[dict] = Field(
+        default=None,
+        description="Optional service data, e.g. {\"brightness\": 128, \"transition\": 2}"
+    )
+
+
+class ClimateTemperatureInput(BaseModel):
+    """Input model for setting a climate entity temperature."""
+
+    model_config = ConfigDict(str_strip_whitespace=True, extra="forbid")
+    entity_id: str = Field(..., description="Climate entity ID, e.g. 'climate.hallway'")
+    temperature: float = Field(..., description="Target temperature")
+    hvac_mode: Optional[str] = Field(
+        default=None,
+        description="Optional HVAC mode, e.g. 'heat', 'cool', 'auto', or 'off'"
+    )
+    service_data: Optional[dict] = Field(
+        default=None,
+        description="Optional extra service data supported by your climate integration"
+    )
 
 
 class DomainFilter(BaseModel):
@@ -140,6 +169,25 @@ class TemplateInput(BaseModel):
 
 
 # ── Tools ─────────────────────────────────────────────────────────────────────
+
+async def _call_service(
+    domain: str,
+    service: str,
+    entity_id: str,
+    service_data: dict[str, Any] | None = None,
+) -> str:
+    """Call a Home Assistant service for a single entity and return pretty JSON."""
+    body: dict[str, Any] = {"entity_id": entity_id}
+    if service_data:
+        body.update(service_data)
+    result = await _post(f"services/{domain}/{service}", body)
+    return json.dumps(result, indent=2)
+
+
+def _require_domain(entity_id: str, expected_domain: str) -> None:
+    """Raise a clear error when a shortcut tool is used with the wrong domain."""
+    if not entity_id.startswith(f"{expected_domain}."):
+        raise ValueError(f"Expected a {expected_domain} entity_id, got '{entity_id}'.")
 
 @mcp.tool(
     name="ha_get_config",
@@ -245,6 +293,158 @@ async def ha_call_service(params: CallServiceInput) -> str:
             body.update(params.service_data)
         result = await _post(f"services/{params.domain}/{params.service}", body)
         return json.dumps(result, indent=2)
+    except Exception as e:
+        return _handle_error(e)
+
+
+@mcp.tool(
+    name="ha_turn_on",
+    annotations={
+        "title": "Turn On Entity",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": False,
+    }
+)
+async def ha_turn_on(params: TurnOnInput) -> str:
+    """
+    Turn on a Home Assistant entity that supports homeassistant.turn_on.
+
+    Common examples include lights, switches, fans, scripts, scenes, and input booleans.
+    Optional service_data can include integration-specific values such as brightness,
+    color temperature, RGB color, or transition.
+    """
+    try:
+        return await _call_service("homeassistant", "turn_on", params.entity_id, params.service_data)
+    except Exception as e:
+        return _handle_error(e)
+
+
+@mcp.tool(
+    name="ha_turn_off",
+    annotations={
+        "title": "Turn Off Entity",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": False,
+    }
+)
+async def ha_turn_off(params: EntityInput) -> str:
+    """Turn off a Home Assistant entity that supports homeassistant.turn_off."""
+    try:
+        return await _call_service("homeassistant", "turn_off", params.entity_id)
+    except Exception as e:
+        return _handle_error(e)
+
+
+@mcp.tool(
+    name="ha_toggle",
+    annotations={
+        "title": "Toggle Entity",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": False,
+    }
+)
+async def ha_toggle(params: EntityInput) -> str:
+    """Toggle a Home Assistant entity that supports homeassistant.toggle."""
+    try:
+        return await _call_service("homeassistant", "toggle", params.entity_id)
+    except Exception as e:
+        return _handle_error(e)
+
+
+@mcp.tool(
+    name="ha_set_temperature",
+    annotations={
+        "title": "Set Climate Temperature",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": False,
+    }
+)
+async def ha_set_temperature(params: ClimateTemperatureInput) -> str:
+    """Set the target temperature for a climate entity, with an optional HVAC mode."""
+    try:
+        _require_domain(params.entity_id, "climate")
+        service_data: dict[str, Any] = {"temperature": params.temperature}
+        if params.hvac_mode:
+            service_data["hvac_mode"] = params.hvac_mode
+        if params.service_data:
+            service_data.update(params.service_data)
+        return await _call_service("climate", "set_temperature", params.entity_id, service_data)
+    except Exception as e:
+        return _handle_error(e)
+
+
+@mcp.tool(
+    name="ha_lock",
+    annotations={
+        "title": "Lock",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": False,
+    }
+)
+async def ha_lock(params: EntityInput) -> str:
+    """Lock a Home Assistant lock entity."""
+    try:
+        _require_domain(params.entity_id, "lock")
+        return await _call_service("lock", "lock", params.entity_id)
+    except Exception as e:
+        return _handle_error(e)
+
+
+@mcp.tool(
+    name="ha_unlock",
+    annotations={
+        "title": "Unlock",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": False,
+    }
+)
+async def ha_unlock(params: EntityInput) -> str:
+    """Unlock a Home Assistant lock entity."""
+    try:
+        _require_domain(params.entity_id, "lock")
+        return await _call_service("lock", "unlock", params.entity_id)
+    except Exception as e:
+        return _handle_error(e)
+
+
+@mcp.tool(
+    name="ha_open_cover",
+    annotations={
+        "title": "Open Cover",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": False,
+    }
+)
+async def ha_open_cover(params: EntityInput) -> str:
+    """Open a Home Assistant cover entity, such as a garage door, shade, blind, or curtain."""
+    try:
+        _require_domain(params.entity_id, "cover")
+        return await _call_service("cover", "open_cover", params.entity_id)
+    except Exception as e:
+        return _handle_error(e)
+
+
+@mcp.tool(
+    name="ha_close_cover",
+    annotations={
+        "title": "Close Cover",
+        "readOnlyHint": False,
+        "destructiveHint": True,
+        "idempotentHint": False,
+    }
+)
+async def ha_close_cover(params: EntityInput) -> str:
+    """Close a Home Assistant cover entity, such as a garage door, shade, blind, or curtain."""
+    try:
+        _require_domain(params.entity_id, "cover")
+        return await _call_service("cover", "close_cover", params.entity_id)
     except Exception as e:
         return _handle_error(e)
 

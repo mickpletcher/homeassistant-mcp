@@ -14,6 +14,8 @@ Run my morning automation.
 
 Claude does this by using Home Assistant's local API. Nothing in this project opens a public web server.
 
+See [changelog.md](changelog.md) for project changes.
+
 ## Who This Is For
 
 Use this if:
@@ -161,6 +163,10 @@ Claude gets tools that can:
 - Read your Home Assistant configuration.
 - List devices and entity states.
 - Check the state of one device or sensor.
+- Turn devices on, off, or toggle them.
+- Set a thermostat or climate device temperature.
+- Lock and unlock supported lock devices.
+- Open and close supported covers, such as shades, blinds, curtains, or garage doors.
 - Call Home Assistant services.
 - List available Home Assistant services.
 - Trigger automations.
